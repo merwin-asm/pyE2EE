@@ -1,13 +1,21 @@
 """
-pyE2EE 1.0.0
+pyE2EE 1.0.2
 A module for end-2-end-encryption.
 Author : Merwin Mathews
 """
 
 
 import rsa
+import base64
+import string
 import socket
+import random
 import threading
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 
 
 class Server:
@@ -25,7 +33,6 @@ class Server:
         self.TotalCons = 0
         self.clients = []
 
-
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(('', port))
         self.server.listen()
@@ -36,8 +43,9 @@ class Server:
         while True:
             c, addr = self.server.accept()
             c.send(self.PublicKey.save_pkcs1("PEM"))
-            client_public_key = rsa.PublicKey.load_pkcs1(c.recv(3000))
-            self.clients.append([c,client_public_key])
+            key = self.recv_rsa(c)
+            f = Fernet(Utils().password_to_key(key))
+            self.clients.append([c,f])
             t = threading.Thread(target=self.client_loop,args=[self,c])
             t.daemon = True
             t.start()
@@ -46,18 +54,19 @@ class Server:
 
     def sendall(self,data):
         for e in self.clients:
-            self.send(e,data.encode())
+            self.send(e,data)
 
     def send(self,client,data):
-        data = Utils().encrypt(data,self.get_publickey(client))
+        data = self.get_publickey(client).encrypt(data.encode())
         client.send(data)
 
     def recv(self,client):
-        data = Utils().decrypt(client.recv(3000), self.PrivateKey)
+        data = self.get_publickey(client).decrypt(client.recv(3000)).decode()
         return data
 
-    def sendping(self,cli):
-        self.send(cli,".")
+    def recv_rsa(self,client):
+        data = Utils().decrypt_rsa(client.recv(3000), self.PrivateKey)
+        return data
 
     def close(self,c):
         self.clients.remove([c,self.get_publickey(c)])
@@ -72,7 +81,8 @@ class Server:
 
 class Client:
     def __init__(self,host_ip,port=5432):
-        self.Client_Public_Key , self.Client_Private_Key = Utils().generate_keys()
+        self.key = Utils().make_random_pass()
+        self.f = Fernet(Utils().password_to_key(self.key))
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect((host_ip, port))
         self.init_connection()
@@ -80,14 +90,17 @@ class Client:
 
     def init_connection(self):
         self.Server_PublicKey = rsa.PublicKey.load_pkcs1(self.client.recv(3000))
-        self.client.send(self.Client_Public_Key.save_pkcs1("PEM"))
+        self.send_rsa(self.key)
 
+
+    def send_rsa(self,data):
+        self.client.send(Utils().encrypt_rsa(data,self.Server_PublicKey))
 
     def send(self,data):
-        self.client.send(Utils().encrypt(data,self.Server_PublicKey))
+        self.client.send(self.f.encrypt(data.encode()))
 
     def recv(self):
-        return Utils().decrypt(self.client.recv(3000),self.Client_Private_Key)
+        return self.f.decrypt(self.client.recv(3000)).decode()
 
     def close(self):
         self.client.close()
@@ -122,13 +135,24 @@ class Utils:
 
 
 
-    def encrypt(self,data,pubkey):
+    def encrypt_rsa(self,data,pubkey):
         return rsa.encrypt(data.encode("ascii"),pubkey)
 
 
-    def decrypt(self,data,privkey):
+    def decrypt_rsa(self,data,privkey):
         try:
             return rsa.decrypt(data,privkey).decode("ascii")
         except:
             return False
 
+    def password_to_key(self,password):
+        salt = b'.-Kh)ura/)\xcef\xc8\x88u\xc2'
+        password = password.encode()
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
+        key = base64.urlsafe_b64encode(kdf.derive(password))
+        return key
+
+    def make_random_pass(self):
+        res = ''.join(random.choices(string.ascii_uppercase +
+                                     string.digits, k=35))
+        return res
