@@ -8,7 +8,7 @@ End To End Encryption in Python.
 ## Features
 
 - Cross platform (i think)
-- RSA Encryption
+- RSA and AES Encryption
 - Examples provided
 ## Usage/Examples
 
