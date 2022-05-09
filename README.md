@@ -27,7 +27,7 @@ def client_loop(server,cli):
 server = pyE2EE.Server(port,client_loop) # client_loop will be called giving args server-obj and client 
 
 server.TotalCons        # gives number of total connections
-server.clients          # is a list of all [client, publckey-of-the-cli]
+server.clients          # is a list of all [client, AES-key-of-the-cli]
 server.send(client,msg) # sends msg
 server.recv(client)     # recvs msg
 server.sendall(msg)     # send all connected clients
