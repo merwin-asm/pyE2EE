@@ -3,6 +3,7 @@
 
 End To End Encryption in Python.
 
+<p align="right"> <img src="https://komarev.com/ghpvc/?username=merwin-pye2ee&label=Project%20views&color=0e75b6&style=flat" alt="darkmash-org" /> </p>
 
 
 ## Features
